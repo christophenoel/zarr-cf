@@ -33,61 +33,25 @@ All properties use the `cf:` namespace prefix and are placed at the root
 
 ### Where the metadata lives
 
-The CF metadata itself is always the same object — a
+The CF metadata is always the **same object** — a
 [CF attribute descriptor](#cf-attribute-descriptor) (`standard_name`, `units`,
-`axis`, …). It can be attached in three ways, integrated with the
-[`coords`](https://github.com/zarr-conventions/coords) convention. A node MUST
-carry at least one of them.
+`axis`, …). What changes is *where* that descriptor is attached. There are three
+placements, integrated with the
+[`coords`](https://github.com/zarr-conventions/coords) convention; a node MUST
+carry at least one of them:
 
-#### 1. `cf:attributes` — on any array (the array's own variable)
+| # | Property | Lives on | Describes | CF source |
+|---|----------|----------|-----------|-----------|
+| 1 | `cf:attributes` | an **array** | that array's own variable | NetCDF — attrs on the variable |
+| 2 | `cf:attributes` embedded in `coords:coordinates[name]` | the node declaring `coords` | one **coordinate** | NetCDF — attrs on the coordinate variable |
+| 3 | `cf:variables` | a **group** | the group's child **data variables** | Zarr-native convenience (no CF equivalent) |
 
-The base case: a Zarr array *is* a single variable, so its CF metadata sits
-directly on its own `attributes`. This mirrors NetCDF, where attributes live on
-the variable. Use it on a **data-variable array**, and optionally on an explicit
-**coordinate array** (a `coords` `type: "array"` target).
-
-```jsonc
-// data-variable array (…/sst)
-"cf:attributes": {
-  "standard_name": "sea_water_temperature",
-  "units": "K",
-  "valid_range": [270.0, 320.0]
-}
-```
-
-#### 2. `cf:attributes` embedded in `coords:coordinates` — for coordinates
-
-A coordinate's metadata rides **inside its `coords` descriptor**, under a
-`cf:attributes` key. This is the integrated path: one place declares both
-*where* a coordinate lives (`coords`) and *what it means* (`cf`). It works for
-every `coords` descriptor type — `array`, `inline`, `interval`, `reference` —
-including those with no array of their own.
-
-```jsonc
-"coords:coordinates": {
-  "time": {
-    "type": "array", "path": "../time",
-    "cf:attributes": { "standard_name": "time", "units": "days since 1850-01-01", "calendar": "noleap", "axis": "T" }
-  },
-  "x": {
-    "type": "reference", "convention": "spatial",
-    "cf:attributes": { "standard_name": "projection_x_coordinate", "units": "m", "axis": "X" }
-  }
-}
-```
-
-For a `type: "array"` coordinate you MAY instead put the descriptor on the
-coordinate array itself (approach 1) — useful when you want it to travel with
-the array.
-
-#### 3. `cf:variables` — a catalogue on a group (data variables only)
-
-An **optional** convenience: a map, keyed by data-variable name, declared once on
-a **group** to describe its child data-variable arrays in one place. This is a
-Zarr-native convenience (handy for consolidated metadata), **not** a NetCDF-CF
-construct. It is recommended **only on a group** — it is not meaningful on an
-array (an array is a single variable; use approach 1 there) — and it is for data
-variables, not coordinates (use approach 2 for those).
+Placements 1 and 2 are both the `cf:attributes` descriptor — applied to an
+array, or embedded in a coordinate's `coords:coordinates` entry; both are
+specified under [`cf:attributes`](#cfattributes) below, including how `cf`
+extends a coordinate and how readers resolve a `type: "array"` coordinate.
+Placement 3 is specified under [`cf:variables`](#cfvariables). Worked snippets of
+all three are in [Examples](#examples).
 
 ```jsonc
 // group (…/dataset)
@@ -189,25 +153,63 @@ Additional properties are allowed.
 
 ### `cf:attributes`
 
-The [CF attribute descriptor](#cf-attribute-descriptor) for **this array's own
-variable**, placed directly on the Zarr array's `attributes` — the same place
-NetCDF stores a variable's attributes. Use it on a data-variable array, or on an
-explicit coordinate array (the target of a `coords` `type: "array"` descriptor).
-The **same descriptor** is also what a coordinate embeds inside its
-`coords:coordinates` entry.
+A single [CF attribute descriptor](#cf-attribute-descriptor) describing **one
+variable**. The same object is used in two placements.
+
+**On an array (placement 1).** A Zarr array *is* a single variable, so a
+top-level `cf:attributes` describes **that array's variable** — the same place
+NetCDF keeps a variable's attributes. Use it on a **data-variable array**, or on
+an explicit **coordinate array** (the sibling array a `coords` `type: "array"`
+descriptor points at). A reader takes `attributes["cf:attributes"]` as the CF
+metadata of the variable the array represents.
+
+**Embedded in a coordinate (placement 2).** This is the primary way to describe
+**coordinates**. `coords:coordinates` maps each coordinate name to a descriptor
+that says only *where* its values are; because those descriptors are
+`additionalProperties: true`, `cf` extends each one **in place** by adding a
+single `cf:attributes` key:
+
+```text
+coords:coordinates[name] = { …coords location fields… , "cf:attributes": { …CF meaning… } }
+                              └──────── owned by coords ───────┘   └──── owned by cf ────┘
+```
+
+One object then declares both halves of a coordinate — `coords` *where it is*,
+the embedded `cf:attributes` *what it means*. It works for **every** coords
+descriptor type, and for `inline`, `interval`, and `reference` coordinates
+(which have no array of their own) it is the **only** place their CF metadata can
+live. Validation splits cleanly: `coords` validates the location fields, `cf`
+validates the embedded `cf:attributes`.
+
+**Resolution for a `type: "array"` coordinate.** Such a coordinate MAY instead
+carry its descriptor on the target coordinate array itself (placement 1); the
+`coords:coordinates` entry then simply **omits** `cf:attributes`. A reader
+resolves the coordinate's CF metadata as:
+
+1. the `cf:attributes` **embedded** in its `coords:coordinates` descriptor, if
+   present; otherwise
+2. the top-level `cf:attributes` on the **array at `path`**.
+
+Writers SHOULD use **one** location, not both; if both appear they SHOULD be
+consistent and the embedded descriptor — declared with the coordinate's actual
+use — is authoritative.
 
 ### `cf:variables`
 
-**Group only; optional.** Map from a **data-variable** name to a [CF attribute
-descriptor](#cf-attribute-descriptor), declared once on a **group** as a
-convenience catalogue for its child data-variable arrays.
+**Group only; optional** (placement 3). A map from a **data-variable** name to a
+[CF attribute descriptor](#cf-attribute-descriptor), declared once on a **group**
+as a convenience catalogue for its child data-variable arrays (handy with
+consolidated metadata).
 
 - **Type**: object (map)
 - **Keys**: a data-variable name.
 - **Values**: a [CF attribute descriptor](#cf-attribute-descriptor).
-- **Notes**: a Zarr-native convenience, not a NetCDF-CF construct. Not for
-  coordinates (use the embedded `coords:coordinates` form) and not meaningful on
-  an array (use `cf:attributes`).
+- **Scope**: a Zarr-native convenience, **not** a NetCDF-CF construct. Not
+  meaningful on an array (an array is one variable — use `cf:attributes`), and
+  not for coordinates (use the embedded form under `cf:attributes`).
+- **Overlap**: it overlaps placement 1 (both describe a data variable); the two
+  SHOULD be consistent, and a variable's own array `cf:attributes` is
+  authoritative if both are present.
 
 #### CF attribute descriptor
 
@@ -236,8 +238,7 @@ enforce it (a field that does not apply is simply omitted).
 | `valid_range` | `number[2]` | both | `[min, max]` valid range. |
 | `ancillary_variables` | `string` | data variable | Space-separated names of ancillary variables. |
 
-See [Where the metadata lives](#where-the-metadata-lives) above for a worked
-snippet of each of the three placements.
+See [Examples](#examples) for a worked snippet of each of the three placements.
 
 ### `cf:version`
 
@@ -247,12 +248,55 @@ pins the major.
 
 ## Examples
 
-Minimal snippets of each approach follow; see the [examples](examples/)
-directory for the complete, validated metadata documents.
+Three end-to-end usage patterns follow, each as a minimal snippet; see the
+[examples](examples/) directory for the complete, validated metadata documents.
 
-### Approaches 1 + 2 — data variable + embedded coordinates
+### Approach 1 — self-describing coordinate array
 
-A data-variable array describes itself via `cf:attributes`, and each coordinate
+A coordinate array carrying its own `cf:attributes` (placement 1 applied to a
+coordinate array) — the array a `coords` `type: "array"` descriptor points at,
+when its `coords:coordinates` entry omits the embedded form. Full file:
+[examples/cf-coordinate-array.json](examples/cf-coordinate-array.json).
+
+```json
+{
+  "zarr_format": 3,
+  "node_type": "array",
+  "dimension_names": ["time"],
+  "attributes": {
+    "zarr_conventions": [
+      { "name": "cf", "schema_url": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json" }
+    ],
+    "cf:attributes": { "standard_name": "time", "units": "days since 1850-01-01", "calendar": "noleap", "axis": "T" }
+  }
+}
+```
+
+### Approach 2 — group catalogue of data variables
+
+An optional `cf:variables` map on a group (placement 3). Full file:
+[examples/cf-group-catalogue.json](examples/cf-group-catalogue.json).
+
+```json
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "zarr_conventions": [
+      { "name": "cf", "schema_url": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json" }
+    ],
+    "cf:variables": {
+      "sst": { "standard_name": "sea_water_temperature", "units": "K" },
+      "sss": { "standard_name": "sea_water_salinity", "units": "1e-3" }
+    }
+  }
+}
+```
+
+### Approach 3 — data variable with coordinates
+
+The comprehensive case (uses placements 1 and 2): a data-variable array
+describes itself via a top-level `cf:attributes`, and each of its coordinates
 carries an embedded `cf:attributes` inside its `coords:coordinates` descriptor.
 Full file: [examples/cf.json](examples/cf.json).
 
@@ -277,47 +321,6 @@ Full file: [examples/cf.json](examples/cf.json).
       }
     },
     "cf:attributes": { "standard_name": "sea_water_temperature", "units": "K" }
-  }
-}
-```
-
-### Approach 1 — a self-describing coordinate array
-
-The array a `coords` `type: "array"` descriptor points at, carrying its own
-`cf:attributes`. Full file:
-[examples/cf-coordinate-array.json](examples/cf-coordinate-array.json).
-
-```json
-{
-  "zarr_format": 3,
-  "node_type": "array",
-  "dimension_names": ["time"],
-  "attributes": {
-    "zarr_conventions": [
-      { "name": "cf", "schema_url": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json" }
-    ],
-    "cf:attributes": { "standard_name": "time", "units": "days since 1850-01-01", "calendar": "noleap", "axis": "T" }
-  }
-}
-```
-
-### Approach 3 — a group catalogue of data variables
-
-An optional `cf:variables` map on a group. Full file:
-[examples/cf-group-catalogue.json](examples/cf-group-catalogue.json).
-
-```json
-{
-  "zarr_format": 3,
-  "node_type": "group",
-  "attributes": {
-    "zarr_conventions": [
-      { "name": "cf", "schema_url": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json" }
-    ],
-    "cf:variables": {
-      "sst": { "standard_name": "sea_water_temperature", "units": "K" },
-      "sss": { "standard_name": "sea_water_salinity", "units": "1e-3" }
-    }
   }
 }
 ```
