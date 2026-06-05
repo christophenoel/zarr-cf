@@ -95,17 +95,27 @@
     },
     "cfAttributes": {
       "type": "object",
-      "description": "CF properties using cf: key prefix. A node MUST carry at least one of 'cf:variables' (the primary placement: a catalogue map, typically on the parent group) or 'cf:attributes' (a per-array mechanism: the CF metadata of this array's own variable).",
+      "description": "CF properties using cf: key prefix, integrated with the coords convention. On an array, 'cf:attributes' carries the CF metadata of that array's own variable. Coordinate metadata is embedded as a 'cf:attributes' object inside each 'coords:coordinates' entry. On a group, an optional 'cf:variables' map describes the group's data variables. A node MUST carry at least one of 'cf:attributes', 'coords:coordinates', or 'cf:variables'.",
       "properties": {
         "zarr_conventions": true,
+        "cf:attributes": {
+          "description": "CF metadata of THIS array's own variable, placed directly on the Zarr array's attributes — the NetCDF-aligned location. Use on a data-variable array, or (optionally) on an explicit coordinate array (a coords 'type: array' target).",
+          "$ref": "#/$defs/cfDescriptor"
+        },
+        "coords:coordinates": {
+          "type": "object",
+          "description": "Owned by the coords convention. Recognized here for integration: each coordinate descriptor MAY embed a 'cf:attributes' object carrying that coordinate's CF metadata. Only the embedded 'cf:attributes' is validated by this schema; the rest of each descriptor is defined and validated by the coords convention.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "cf:attributes": { "$ref": "#/$defs/cfDescriptor" }
+            }
+          }
+        },
         "cf:variables": {
           "type": "object",
-          "description": "Primary placement. Map from a coordinate or variable name to a CF descriptor, typically declared once on the parent group as a catalogue for its child arrays. Also valid on an array (e.g. for its non-array coordinates). Keys match a key in a 'coords:coordinates' map or a data-variable name.",
+          "description": "RECOMMENDED on a group only. Map from a data-variable name to a CF descriptor — an optional convenience catalogue describing the group's child data-variable arrays in one place. It is a Zarr-native convenience, not a NetCDF-CF construct, and is not meaningful on an array (an array represents a single variable — use 'cf:attributes' there). Coordinates are described via 'coords:coordinates' / 'cf:attributes', not here.",
           "additionalProperties": { "$ref": "#/$defs/cfDescriptor" }
-        },
-        "cf:attributes": {
-          "description": "Per-array mechanism. CF metadata of THIS array's own variable, placed directly on the variable's Zarr array metadata — the NetCDF-aligned location. Use on a data-variable array, or on an explicit coordinate array (a coords 'type: array' target).",
-          "$ref": "#/$defs/cfDescriptor"
         },
         "cf:version": {
           "type": "integer",
@@ -114,8 +124,9 @@
         }
       },
       "anyOf": [
-        { "required": ["cf:variables"] },
-        { "required": ["cf:attributes"] }
+        { "required": ["cf:attributes"] },
+        { "required": ["coords:coordinates"] },
+        { "required": ["cf:variables"] }
       ],
       "additionalProperties": true
     }
