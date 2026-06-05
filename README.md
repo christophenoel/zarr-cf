@@ -151,73 +151,15 @@ see [Where the metadata lives](#where-the-metadata-lives).
 
 Additional properties are allowed.
 
-### `cf:attributes`
+### CF attribute descriptor
 
-A single [CF attribute descriptor](#cf-attribute-descriptor) describing **one
-variable**. The same object is used in two placements.
-
-**On an array (placement 1).** A Zarr array *is* a single variable, so a
-top-level `cf:attributes` describes **that array's variable** — the same place
-NetCDF keeps a variable's attributes. Use it on a **data-variable array**, or on
-an explicit **coordinate array** (the sibling array a `coords` `type: "array"`
-descriptor points at). A reader takes `attributes["cf:attributes"]` as the CF
-metadata of the variable the array represents.
-
-**Embedded in a coordinate (placement 2).** This is the primary way to describe
-**coordinates**. `coords:coordinates` maps each coordinate name to a descriptor
-that says only *where* its values are; because those descriptors are
-`additionalProperties: true`, `cf` extends each one **in place** by adding a
-single `cf:attributes` key:
-
-```text
-coords:coordinates[name] = { …coords location fields… , "cf:attributes": { …CF meaning… } }
-                              └──────── owned by coords ───────┘   └──── owned by cf ────┘
-```
-
-One object then declares both halves of a coordinate — `coords` *where it is*,
-the embedded `cf:attributes` *what it means*. It works for **every** coords
-descriptor type, and for `inline`, `interval`, and `reference` coordinates
-(which have no array of their own) it is the **only** place their CF metadata can
-live. Validation splits cleanly: `coords` validates the location fields, `cf`
-validates the embedded `cf:attributes`.
-
-**Resolution for a `type: "array"` coordinate.** Such a coordinate MAY instead
-carry its descriptor on the target coordinate array itself (placement 1); the
-`coords:coordinates` entry then simply **omits** `cf:attributes`. A reader
-resolves the coordinate's CF metadata as:
-
-1. the `cf:attributes` **embedded** in its `coords:coordinates` descriptor, if
-   present; otherwise
-2. the top-level `cf:attributes` on the **array at `path`**.
-
-Writers SHOULD use **one** location, not both; if both appear they SHOULD be
-consistent and the embedded descriptor — declared with the coordinate's actual
-use — is authoritative.
-
-### `cf:variables`
-
-**Group only; optional** (placement 3). A map from a **data-variable** name to a
-[CF attribute descriptor](#cf-attribute-descriptor), declared once on a **group**
-as a convenience catalogue for its child data-variable arrays (handy with
-consolidated metadata).
-
-- **Type**: object (map)
-- **Keys**: a data-variable name.
-- **Values**: a [CF attribute descriptor](#cf-attribute-descriptor).
-- **Scope**: a Zarr-native convenience, **not** a NetCDF-CF construct. Not
-  meaningful on an array (an array is one variable — use `cf:attributes`), and
-  not for coordinates (use the embedded form under `cf:attributes`).
-- **Overlap**: it overlaps placement 1 (both describe a data variable); the two
-  SHOULD be consistent, and a variable's own array `cf:attributes` is
-  authoritative if both are present.
-
-#### CF attribute descriptor
-
-Every field is **optional** — different variables use different subsets — and
-descriptors are `additionalProperties: true`, so any CF attribute not listed
-here passes through unchanged. The **Applies to** column notes whether a field
-is meaningful on a coordinate, a data variable, or both; the schema does not
-enforce it (a field that does not apply is simply omitted).
+The shared object carried by every placement below: a set of CF attributes for a
+single variable or coordinate. Every field is **optional** — different variables
+use different subsets — and the descriptor is `additionalProperties: true`, so
+any CF attribute not listed here passes through unchanged. The **Applies to**
+column notes whether a field is meaningful on a coordinate, a data variable, or
+both; the schema does not enforce it (a field that does not apply is simply
+omitted).
 
 | Field | Type | Applies to | Description |
 |-------|------|------------|-------------|
@@ -238,7 +180,83 @@ enforce it (a field that does not apply is simply omitted).
 | `valid_range` | `number[2]` | both | `[min, max]` valid range. |
 | `ancillary_variables` | `string` | data variable | Space-separated names of ancillary variables. |
 
-See [Examples](#examples) for a worked snippet of each of the three placements.
+This descriptor appears in three placements — `cf:attributes`, embedded in
+`coords:coordinates`, and `cf:variables` — specified next.
+
+### `cf:attributes`
+
+A single [CF attribute descriptor](#cf-attribute-descriptor) describing **one
+variable**. It is used in two of the three placements (1 and 2).
+
+#### On an array — placement 1
+
+A Zarr array *is* a single variable, so a top-level `cf:attributes` describes
+**that array's variable** — the same place NetCDF keeps a variable's attributes.
+Use it on a **data-variable array**, or on an explicit **coordinate array** (the
+sibling array a `coords` `type: "array"` descriptor points at). A reader takes
+`attributes["cf:attributes"]` as the CF metadata of the variable the array
+represents.
+
+#### Embedded in a coordinate — placement 2
+
+The primary way to describe **coordinates**: the descriptor is added **inside**
+the coordinate's `coords:coordinates` entry, under a `cf:attributes` key. Because
+`coords` descriptors are `additionalProperties: true`, `cf` extends each one in
+place without changing the `coords` schema. The shape inside a node's
+`attributes`:
+
+```text
+attributes
+└─ coords:coordinates                    ← map (owned by the coords convention)
+   └─ <coordinate-name>                   ← one coordinate descriptor
+      ├─ type        "array" | "inline" | "interval" | "reference"  ┐ location
+      ├─ path | values | start/end/step | convention                ┘ (owned by coords)
+      └─ cf:attributes                    ← added by THIS convention
+         ├─ standard_name
+         ├─ units
+         ├─ axis / positive / calendar
+         └─ …                             (a CF attribute descriptor)
+```
+
+So one object declares both halves of a coordinate — `coords` says *where it
+is*, the embedded `cf:attributes` says *what it means*. It works for **every**
+coords descriptor type, and for `inline`, `interval`, and `reference`
+coordinates (which have no array of their own) it is the **only** place their CF
+metadata can live. Validation splits cleanly: `coords` validates the location
+fields, `cf` validates the embedded `cf:attributes`.
+
+#### Resolving a `type: "array"` coordinate
+
+A `type: "array"` coordinate MAY instead carry its descriptor on the target
+coordinate array itself (placement 1); its `coords:coordinates` entry then simply
+**omits** `cf:attributes`. A reader resolves the coordinate's CF metadata as:
+
+1. the `cf:attributes` **embedded** in its `coords:coordinates` descriptor, if
+   present; otherwise
+2. the top-level `cf:attributes` on the **array at `path`**.
+
+Writers SHOULD use **one** location, not both; if both appear they SHOULD be
+consistent and the embedded descriptor — declared with the coordinate's actual
+use — is authoritative.
+
+See [Examples](#examples) for a worked snippet of each placement.
+
+### `cf:variables`
+
+**Group only; optional** (placement 3). A map from a **data-variable** name to a
+[CF attribute descriptor](#cf-attribute-descriptor), declared once on a **group**
+as a convenience catalogue for its child data-variable arrays (handy with
+consolidated metadata).
+
+- **Type**: object (map)
+- **Keys**: a data-variable name.
+- **Values**: a [CF attribute descriptor](#cf-attribute-descriptor).
+- **Scope**: a Zarr-native convenience, **not** a NetCDF-CF construct. Not
+  meaningful on an array (an array is one variable — use `cf:attributes`), and
+  not for coordinates (use the embedded form, placement 2).
+- **Overlap**: it overlaps placement 1 (both describe a data variable); the two
+  SHOULD be consistent, and a variable's own array `cf:attributes` is
+  authoritative if both are present.
 
 ### `cf:version`
 
@@ -341,8 +359,6 @@ This convention follows the **integer-major with URL pin** contract (contract
   framework's safely-ignorable principle.
 
 ## Acknowledgements
-
-The template is based on the [STAC extensions template](https://github.com/stac-extensions/template/blob/main/README.md).
 
 The attribute vocabulary is drawn from the
 [CF (Climate and Forecast) Metadata Conventions](https://cfconventions.org/).
