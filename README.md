@@ -22,6 +22,11 @@ the descriptive attributes defined by the
 [CF (Climate and Forecast) Metadata Conventions](https://cfconventions.org/),
 sections 3 and 4.1–4.4.
 
+`cf` is **one of a planned set of focused CF-related Zarr conventions** and
+covers only the *semantic attributes* part. Other CF concerns are intended for
+sibling conventions (e.g. cell bounds & methods, parametric vertical
+coordinates); see [`CF-to-zarr.md`](../CF-to-zarr.md) for the full split.
+
 All properties use the `cf:` namespace prefix and are placed at the root
 `attributes` level following the
 [Zarr Conventions Specification](https://github.com/zarr-conventions/zarr-conventions-spec).
