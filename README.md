@@ -3,8 +3,8 @@
 - **UUID**: 0c0a02d2-8a95-4303-8b62-16a50b439d74
 - **Name**: "cf"
 - **Namespace**: `cf:`
-- **Schema URL**: "<https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json>"
-- **Spec URL**: "<https://github.com/zarr-conventions/cf/blob/v1/README.md>"
+- **Schema URL**: "<https://github.com/christophenoel/zarr-cf/blob/master/schema.json>"
+- **Spec URL**: "<https://github.com/christophenoel/zarr-cf/blob/master/README.md"
 - **Extension Maturity Classification**: Proposal
 - **Owner**: @christophenoel
 
