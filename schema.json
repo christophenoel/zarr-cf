@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json",
+  "title": "CF Convention (cf:)",
+  "description": "Schema for cf information in Zarr. Properties use the 'cf:' namespace prefix.",
+  "type": "object",
+  "properties": {
+    "zarr_format": {
+      "type": "integer",
+      "description": "Zarr format version"
+    },
+    "node_type": {
+      "type": "string",
+      "enum": ["array", "group"],
+      "description": "Type of Zarr node"
+    },
+    "attributes": {
+      "type": "object",
+      "description": "Zarr attributes containing convention metadata and cf: prefixed properties",
+      "properties": {
+        "zarr_conventions": {
+          "type": "array",
+          "description": "Array of convention metadata objects",
+          "contains": {
+            "$ref": "#/$defs/conventionMetadata"
+          }
+        }
+      },
+      "required": ["zarr_conventions"],
+      "$ref": "#/$defs/cfAttributes"
+    }
+  },
+  "required": ["zarr_format", "node_type", "attributes"],
+  "additionalProperties": true,
+  "$defs": {
+    "conventionMetadata": {
+      "type": "object",
+      "description": "CF convention metadata object for use in zarr_conventions array",
+      "properties": {
+        "schema_url": {
+          "type": "string",
+          "const": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json",
+          "description": "URL to the JSON Schema definition for this convention"
+        },
+        "spec_url": {
+          "type": "string",
+          "const": "https://github.com/zarr-conventions/cf/blob/v1/README.md",
+          "description": "URL to the full specification document"
+        },
+        "uuid": {
+          "type": "string",
+          "const": "0c0a02d2-8a95-4303-8b62-16a50b439d74",
+          "description": "UUID that permanently identifies this convention"
+        },
+        "name": {
+          "type": "string",
+          "const": "cf",
+          "description": "Human-readable name of the convention"
+        },
+        "description": {
+          "type": "string",
+          "const": "CF semantic metadata — standard names, units, axis, calendar, and data-quality attributes — for Zarr data variables and coordinates.",
+          "description": "Brief description of the convention's purpose and usage"
+        }
+      },
+      "anyOf": [
+        { "required": ["schema_url"] },
+        { "required": ["spec_url"] },
+        { "required": ["uuid"] }
+      ],
+      "additionalProperties": false
+    },
+    "cfDescriptor": {
+      "type": "object",
+      "description": "CF semantic attributes for one variable or coordinate. Every field is optional; unknown CF attributes pass through (additionalProperties: true).",
+      "properties": {
+        "standard_name": { "type": "string", "description": "A name from the CF standard name table identifying the physical quantity." },
+        "long_name": { "type": "string", "description": "Human-readable descriptive name." },
+        "units": { "type": "string", "description": "Units of measure (UDUNITS). For time coordinates, the '<unit> since <epoch>' form, e.g. 'days since 1850-01-01'." },
+        "comment": { "type": "string", "description": "Miscellaneous information about the variable or its method of production." },
+        "references": { "type": "string", "description": "References that describe the variable or its method of production." },
+        "source": { "type": "string", "description": "Method of production of the original data." },
+        "axis": { "type": "string", "enum": ["X", "Y", "Z", "T"], "description": "Axis role for a coordinate: X, Y, Z, or T." },
+        "positive": { "type": "string", "enum": ["up", "down"], "description": "Direction of increasing values for a vertical (Z) coordinate." },
+        "calendar": { "type": "string", "description": "Calendar for a time coordinate, e.g. 'standard', 'proleptic_gregorian', 'noleap', '360_day'." },
+        "flag_values": { "type": "array", "description": "Values corresponding to flag_meanings, for flag / category variables." },
+        "flag_masks": { "type": "array", "description": "Bit masks corresponding to flag_meanings, for bitfield flags." },
+        "flag_meanings": { "type": "string", "description": "Space-separated list of flag names matching flag_values / flag_masks." },
+        "valid_min": { "type": "number", "description": "Smallest valid value." },
+        "valid_max": { "type": "number", "description": "Largest valid value." },
+        "valid_range": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "[min, max] valid range." },
+        "ancillary_variables": { "type": "string", "description": "Space-separated names of ancillary variables (e.g. uncertainty or quality-flag variables)." }
+      },
+      "additionalProperties": true
+    },
+    "cfAttributes": {
+      "type": "object",
+      "description": "CF properties using cf: key prefix. A node MUST carry at least one of 'cf:variables' (the primary placement: a catalogue map, typically on the parent group) or 'cf:attributes' (a per-array mechanism: the CF metadata of this array's own variable).",
+      "properties": {
+        "zarr_conventions": true,
+        "cf:variables": {
+          "type": "object",
+          "description": "Primary placement. Map from a coordinate or variable name to a CF descriptor, typically declared once on the parent group as a catalogue for its child arrays. Also valid on an array (e.g. for its non-array coordinates). Keys match a key in a 'coords:coordinates' map or a data-variable name.",
+          "additionalProperties": { "$ref": "#/$defs/cfDescriptor" }
+        },
+        "cf:attributes": {
+          "description": "Per-array mechanism. CF metadata of THIS array's own variable, placed directly on the variable's Zarr array metadata — the NetCDF-aligned location. Use on a data-variable array, or on an explicit coordinate array (a coords 'type: array' target).",
+          "$ref": "#/$defs/cfDescriptor"
+        },
+        "cf:version": {
+          "type": "integer",
+          "const": 1,
+          "description": "Major version of the cf convention this metadata was authored against. Optional because schema_url already pins the major."
+        }
+      },
+      "anyOf": [
+        { "required": ["cf:variables"] },
+        { "required": ["cf:attributes"] }
+      ],
+      "additionalProperties": true
+    }
+  }
+}

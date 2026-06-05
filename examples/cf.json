@@ -1,0 +1,48 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "zarr_conventions": [
+      {
+        "schema_url": "https://raw.githubusercontent.com/zarr-conventions/cf/refs/tags/v1/schema.json",
+        "spec_url": "https://github.com/zarr-conventions/cf/blob/v1/README.md",
+        "uuid": "0c0a02d2-8a95-4303-8b62-16a50b439d74",
+        "name": "cf",
+        "description": "CF semantic metadata — standard names, units, axis, calendar, and data-quality attributes — for Zarr data variables and coordinates."
+      }
+    ],
+    "cf:variables": {
+      "time": {
+        "standard_name": "time",
+        "long_name": "observation time",
+        "units": "days since 1850-01-01",
+        "calendar": "noleap",
+        "axis": "T"
+      },
+      "y": {
+        "standard_name": "projection_y_coordinate",
+        "units": "m",
+        "axis": "Y"
+      },
+      "x": {
+        "standard_name": "projection_x_coordinate",
+        "units": "m",
+        "axis": "X"
+      },
+      "sea_water_temperature": {
+        "standard_name": "sea_water_temperature",
+        "long_name": "sea water temperature",
+        "units": "K",
+        "valid_range": [270.0, 320.0],
+        "ancillary_variables": "sea_water_temperature_qc"
+      },
+      "sea_water_temperature_qc": {
+        "standard_name": "sea_water_temperature status_flag",
+        "long_name": "sea water temperature quality flag",
+        "flag_values": [0, 1, 2],
+        "flag_meanings": "good probably_good bad"
+      }
+    },
+    "cf:version": 1
+  }
+}
